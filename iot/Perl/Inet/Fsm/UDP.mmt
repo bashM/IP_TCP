@@ -1,0 +1,139 @@
+package Inet::Fsm::UDP;
+#================================================================--
+# File Name    : Fsm/UDP.pm
+#
+# Purpose      : UDP Controller
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskName => my $taskName
+   };
+
+   if (defined($params{taskName})) {
+      $self->{taskName} = $params{taskName};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::UDP->new  taskName undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+
+my $generic_pkt; 
+my $ethernet_pkt; 
+my $ip_pkt;
+my $udp_pkt;
+my $icmp_pkt;
+my $raw;
+my @keys;
+my $k;
+my $ns;
+my $opcode;
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "SIN",
+
+    if (Inet::Collection::FLAG->get_trace()) {
+      print("In UDP\n");
+   }
+
+   $raw = Tosf::Table::MESSAGE->dequeue($self->{taskName});
+   $generic_pkt->decode($raw);
+   $opcode = $generic_pkt->get_opcode();
+   if ($opcode == 0) {
+      $ns = "OP0";
+   } elsif ($opcode == 1) {
+      $ns = "OP1";
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::UDP->new  invalid opcode $opcode"));
+   },
+
+   $ns
+)
+
+mmt_TableRow(
+   "SOUT",
+
+   if (Inet::Collection::FLAG->get_trace()) {
+      print("Out UDP\n");
+   }
+
+   Tosf::Table::MESSAGE->wait($self->{taskName}),
+
+   "SIN"
+)
+
+mmt_TableRow(
+   "OP0", 
+
+   $udp_pkt->decode(generic_pkt->get_msg());
+   $dest_port = $udp_pkt->get_dest_port();
+   if ($est_port == ) {
+      Tosf::Table::MESSAGE->enqueue("INC", $generic_pkt->encode());
+      Tosf::Table::MESSAGE->signal("INC");
+   } elsif (dest_port == ) {
+      Tosf::Table::MESSAGE->enqueue("INCD", $generic_pkt->encode());
+      Tosf::Table::MESSAGE->signal("INCD");
+   },
+   
+   "SOUT"
+)
+
+mmt_TableRow(
+   "OP1", 
+
+   $icmp_pkt->decode($generic_pkt->get_msg());
+   if ($icmp_pkt->get_type() eq "REPLY") {
+      $streamDev = Inet::Table::DEV->get_streamDev();
+      my $t = time() - $icmp_pkt->get_msg();
+      my $s = $generic_pkt->get_src_ip();
+      Inet::Table::DEV->enqueue_packet($streamDev, "Ping Reply from $s Turn-arount-time = $t (s)\n");
+   } elsif ($icmp_pkt->get_type() eq "ECHO") {
+      $icmp_pkt->set_type("REPLY");
+      $k = $generic_pkt->get_src_ip(); 
+      $generic_pkt->set_msg($icmp_pkt->encode());
+      $generic_pkt->set_src_ip($generic_pkt->get_dest_ip());
+      $generic_pkt->set_dest_ip($k);
+      $generic_pkt->set_opcode(1);
+      Tosf::Table::MESSAGE->enqueue("IP", $generic_pkt->encode());
+      Tosf::Table::MESSAGE->signal("IP");
+   } else {
+      #print("unknown UDP type \n");
+   },
+
+   "SOUT"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "SIN",
+
+   Tosf::Table::MESSAGE->wait($self->{taskName});
+   $generic_pkt = Inet::Packet::Generic->new();
+   $icmp_pkt = Inet::Packet::Icmp->new();
+   $udp_pkt = Inet::Packet::Udp->new();
+
+)
+
+1;

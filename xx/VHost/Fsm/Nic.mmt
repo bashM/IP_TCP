@@ -1,0 +1,131 @@
+package VHost::Fsm::Nic;
+#================================================================--
+# File Name    : Fsm/Nic.pm
+#
+# Purpose      : network Interface Controller
+#
+# Author       : Basheer, Mohammad, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      dcbID => my $dcbID,
+      semID => my $semID
+   };
+
+   if (defined($params{taskID})) {
+      $self->{taskID} = $params{taskID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::Nic->new  taskID undefined"));
+   }
+
+   if (defined($params{dcbID})) {
+      $self->{dcbID} = $params{dcbID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::Nic->new  dcbID undefined"));
+   }
+
+   if (defined($params{semID})) {
+      $self->{semID} = $params{semID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::Nic->new  semID undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+
+my %stdioLineParams = (
+   maxbuff => 10000,
+   inLeftFrame => '',
+   inRightFrame => "\n",
+   outLeftFrame => '',
+   outRightFrame => "\n"
+);
+
+   my $pkt;
+   my $msg_tag;
+   my $generic_packet = Inet::Packet::Generic->new();
+   my $ethernet_packet = Inet::Packet::Ethernet->new();
+   my $ip_packet = Inet::Packet::Ip->new();
+
+mmt_TableBegin
+
+   my @keys;
+   my $k;
+   my $readSuccess;
+
+mmt_TableRow(
+   "S0",
+   $readSuccess = FALSE;
+   if (Inet::Table::DCB->get_opened($self->{dcbID})) {
+      $pkt= Inet::Table::DCB->dequeue_packet($self->{dcbID});
+
+      if ((defined($pkt)) && (length($pkt) != 0)) {
+         $readSuccess = TRUE;
+
+         if (($self->{dcbID}) eq 'p' ){
+
+            if ($pkt ne "heartbeat"){
+
+	       $generic_packet->set_interface("eth0");
+	       $generic_packet->set_msg($pkt);
+	       $generic_packet->set_opcode("NIC");
+	       #$generic_packet->dump();
+	       Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN NIC GOING TO ETHERNET -=-=-=-=-=-=\n", %stdioLineParams);
+
+               Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+               Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem');
+            }
+
+            Inet::Table::DCB->enqueue_packet("stdio", "RAW FROM Socket " . $pkt, %stdioLineParams);
+
+         }elsif((($self->{dcbID}) eq 'p2p0') || (($self->{dcbID}) eq 'p2p1')){
+
+            if ($pkt ne "heartbeat"){
+
+	       $generic_packet->decode($pkt);
+	       $generic_packet->set_opcode("NIC");
+	       #$generic_packet->dump();
+	       Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN NIC GOING TO P2P -=-=-=-=-=-=\n", %stdioLineParams);
+
+               Tosf::Table::QUEUE->enqueue('hP2P', $generic_packet->encode());
+               Tosf::Table::SEMAPHORE->signal(semaphore => 'hP2pSem');
+	    }
+	    Inet::Table::DCB->enqueue_packet("stdio", "RAW FROM Socket " . $pkt, %stdioLineParams);
+         }
+      }
+   }
+   if (!$readSuccess) {
+      Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+   },
+
+   "S0"
+)
+
+mmt_TableEnd
+
+mmt_Reset(
+   "S0",
+
+   Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+
+)
+
+1;

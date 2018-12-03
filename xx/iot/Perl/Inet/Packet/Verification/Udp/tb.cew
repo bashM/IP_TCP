@@ -1,0 +1,58 @@
+#================================================================--
+# File Name    : Packet/Verification/Udp/tb.cew
+#
+# Purpose      : unit testing
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#================================================================--
+
+$| = 1;
+use strict;
+use warnings;
+
+include(cew.pl)
+
+use lib '../../../../';
+use Tosf::Exception::Trap;
+use Inet::Packet::Udp;
+use Inet::Packet::Ip;
+use Try::Tiny;
+
+cew_Variables
+
+sub leaveScript {
+   cew_Summary
+   print("Bye\n");
+   exit(0);
+}
+
+$SIG{INT} = sub {leaveScript();};
+
+my $y = Inet::Packet::Ip->new();
+$y->set_src_ip("192.168.18.21");
+$y->set_dest_ip("192.168.18.22");
+
+my $z = Inet::Packet::Udp->new();
+$z->set_src_port(23);
+$z->set_dest_port(24);
+$z->set_msg("Hello World");
+#$y->set_msg($z->encode());
+my $udp_raw = $z->encode();
+$y->set_msg($udp_raw);
+my $ip_raw = $y->encode();
+
+my $a = Inet::Packet::Ip->new();
+$a->decode($ip_raw);
+my $xx = $a->get_msg();
+my $b = Inet::Packet::Udp->new();
+$b->decode($a->get_msg());
+my $src = $b->get_src_port();
+my $dest = $b->get_dest_port();
+
+cew_Ncase(, $src, 23)
+cew_Ncase(, $dest, 24)
+
+cew_Summary

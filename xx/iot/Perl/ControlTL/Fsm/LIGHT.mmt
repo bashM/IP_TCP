@@ -1,0 +1,122 @@
+package ControlTL::Fsm::LIGHT;
+#================================================================--
+# File Name    : ControlTL::Fsm/LIGHT.pm
+#
+# Purpose      : implements task LIGHT (light selection)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+   };
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+my $ns;
+
+mmt_TableRow(
+   "HG", 
+   
+   $main::line->enqueue_packet("LIGHT HG");
+   my $car = Tosf::Table::SVAR->get_value("sv_car");
+   my $lto = Tosf::Table::SVAR->get_value("sv_lto");
+   my $sto = Tosf::Table::SVAR->get_value("sv_sto");
+   if (!($car && $lto)) {
+      $ns = "HG";
+   } else {
+      $ns = "HY";
+      Tosf::Table::TASK->reset("STO");
+      Tosf::Table::TASK->reset("LTO");
+   }
+
+   Tosf::Table::TASK->suspend("LIGHT"),
+
+   $ns
+)
+
+
+mmt_TableRow(
+   "HY", 
+
+   $main::line->enqueue_packet("LIGHT HY");
+   my $car = Tosf::Table::SVAR->get_value("sv_car");
+   my $lto = Tosf::Table::SVAR->get_value("sv_lto");
+   my $sto = Tosf::Table::SVAR->get_value("sv_sto");
+   if (!$sto) {
+      $ns = "HY";
+   } else {
+      $ns = "FG";
+      Tosf::Table::TASK->reset("STO");
+      Tosf::Table::TASK->reset("LTO");
+   }
+
+   Tosf::Table::TASK->suspend("LIGHT"),
+
+   $ns
+)
+
+mmt_TableRow(
+   "FG", 
+
+   $main::line->enqueue_packet("LIGHT FG");
+   my $car = Tosf::Table::SVAR->get_value("sv_car");
+   my $lto = Tosf::Table::SVAR->get_value("sv_lto");
+   my $sto = Tosf::Table::SVAR->get_value("sv_sto");
+   if (($car || (!$sto)) && (!$lto)) {
+      $ns = "FG";
+   } else {
+      $ns = "FY";
+      Tosf::Table::TASK->reset("STO");
+      Tosf::Table::TASK->reset("LTO");
+   }
+
+   Tosf::Table::TASK->suspend("LIGHT"),
+
+   $ns
+)
+
+mmt_TableRow(
+   "FY", 
+
+   $main::line->enqueue_packet("LIGHT FY");
+   my $car = Tosf::Table::SVAR->get_value("sv_car");
+   my $lto = Tosf::Table::SVAR->get_value("sv_lto");
+   my $sto = Tosf::Table::SVAR->get_value("sv_sto");
+   if (!$sto) {
+      $ns = "FY";
+   } else {
+      $ns = "HG";
+      Tosf::Table::TASK->reset("STO");
+      Tosf::Table::TASK->reset("LTO");
+   }
+
+   Tosf::Table::TASK->suspend("LIGHT"),
+
+  $ns
+)
+
+mmt_TableEnd
+
+mmt_Reset(
+   "HG",
+
+)
+
+1;

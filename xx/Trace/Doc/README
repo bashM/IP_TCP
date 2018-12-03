@@ -1,0 +1,19 @@
+trace.1 contains a trace of task FOO using EDF scheduling.  Note that
+execution time (steps), deadline and period are all 10.
+
+trace.2 contains a trace of task FOO using EDF scheduling.  Note that
+execution time (steps) is 11 and, deadline and period are all 10. As
+expected, the task misses its deadline.
+
+trace.3 contains a trace of task FOO using RM scheduling.  Note that
+execution time (steps), deadline and period are all 10.
+
+trace.4 contains a trace of task FOO using RM scheduling.  Note that
+execution time (steps) is 11 and, deadline and period are all 10. As
+expected, the task misses its deadline.
+
+To reproduce these traces, 
+   - uncomment the print statements in Tosf::Executive/SCHEDULER.pm
+   - in main.pl, modify the instance of FOO and the variable $schedulingAlgorithm
+
+

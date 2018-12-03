@@ -1,0 +1,137 @@
+		      CSCI 460 Virtual internet  
+                      +++++++++++++++++++++++++
+                    (System Requirements Overview)
+
+Last Updated: Tuesday Jan 31 2018
+
+Goal
+====
+
+  - Build a virtual packet-switching internet based on TCP/IP protocols
+  - Protocols must be "approximately" RFC compliant
+  - Favour ease of development over virtual network speed
+  - Use serial lines and the real Internet to transport
+    virtual packets
+  - Virtual packet processing should be event driven where multiple
+    virtual packets are processed by the stack at any give moment (as
+    opposed to the model where a single virtual packet moves  from link
+    layer to application layer (and visa versa) before the next virtual
+    packet can be processed).
+
+
+Preamble
+========
+
+inet is a virtual packet-switching internet based on TCP/IP protocols.
+inet is constructed from nodes (devices NOT assigned inet IP addresses)
+and hosts (devices assigned inet IP addresses).  Nodes include hubs and
+switches. Hosts include routers and IP-aware devices (computers).
+
+A LAN is constructed by interconnecting  two or more hosts using a hub or
+swaich.  LANs can be connected in a hierarchy using hub/switch up-links
+or can be connected as a WAN using hubs/switchs and p2p connections.
+inet is the collective name given to multiple interacting nodes and
+hosts configured into LANs and WANs.
+
+Ports and Addresses
+===================
+
+IP address is a dot-decimal string containing 4 8-bit decimal numbers
+   e.g.,  "192.168.18.21" (note, numbers may not contain leading 0s).
+Host id. is a string  containing 1 8-bit decimal number e.g., "21".
+Network id. is a dot-decimal string containing 3 8-bit decimal numbers
+   e.g.,  "192.168.18".
+IP broadcast address is "255.255.255.255".
+Port address is an  integer string e.g., "23".
+Mac address is an  integer string e.g., "7071".
+Mac broadcast address is "0".
+
+Note that Mac broadcasts are local to a LAN and IP broadcasts
+are never forwarded  by a router.
+
+Packet Fields
+=============
+
+Valid values for a ethernet proto field are {"IP", "ARP"}.
+Valid values for an ip  proto field are {"TCP", "UDP", "ICMP"}.
+Valid values for an arp  opcode field are {"REQUEST", "REPLY"}.
+Valid values for icmp type field  are {"ECHO", "ECHO_REPLY", "INFO_REPLY",
+"TIME_EXCEEDED", "HOST_UNREACHABLE"}
+
+Static MAC Assignments
+======================
+
+IP Address		MAC
+------------		---
+192.168.a.b		(a * 100) + b
+
+ICMP SERVICES
+=============
+Name			Payload In		Payload Out
+----			----------		-----------
+pingd			(fload) time 		(float) time
+
+UDP Services
+============
+
+Name(port)		Payload In		Payload Out
+----			----------		-----------
+incd(40)		(int) val		(int) incremented val
+
+guessd(50)		(int) val		(string) guess result
+
+Behaviour incd
+--------------
+if a client on "192.168.5.3" sends val==23 to incd at "192.168.5.51":"40",
+then incd should return val==24 to the client.
+
+Behaviour guessd
+----------------
+guessd manages a number guessing game.  Clients must register with the
+server to play the game.  A client's first interaction with guessd is
+viewed as registration and subsequently, the client is prompted to guess
+a number between 1 and 100.
+
+Any unsolicited guesses are dropped (with the exception of the
+registration guess). 
+
+The result of a guess is sent to all registered clients with an indication
+of guess "goodness".
+
+A val==0 guess indicates a client wants to leave the game.
+
+New games are started with no registered clients.
+
+Legacy Tools (deprecated)
+=========================
+hubSniffer.pl captures packets from a vhub port. It is
+a simple host and may be used on a VLAN at any time.
+
+hubServer.pl implements multiple vhubs.
+
+p2pServer.pl implements  multiple vp2p connections.
+
+vstack.pl implements one or more  inet tcp/ip stacks.
+
+Packing and Framing
+===================
+
+Module		Packing/Collection Framing Tokens
+------		---------------------------------
+Ethernet.pm 	'_I_'
+Udp.pm		'_J_'
+Ip.pm		'_K_'
+Arp.pm		'_L_'
+Icmp.pm		'_M_'
+Generic.pm	'_N_'
+Line.pm		(user defines framing tokens)
+
+Note, at a future date, user-data may be encoded as hex. strings to
+ensure that user-data is not incorrectly interpreted as framing tokens.
+
+Heartbeat
+=========
+Connection services  are based on TCP.  These connections are removed
+by the Unix/Linux OS if the associated channel is idle for a prescribed
+amount of time. To keep a channel open, a heartbeat packet is transmitted
+along the channel periodically  The heartbeat is discarded once received.

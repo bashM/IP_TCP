@@ -1,0 +1,92 @@
+package LightsTL::Fsm::LIGHT;
+#================================================================--
+# File Name    : LightsTL::Fsm/LIGHT.pm
+#
+# Purpose      : implements task LIGHT (light activation)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant TRUE => 1;
+use constant FALSE => 0;
+
+my $flashOn = TRUE;
+my $lightTo;
+my $msg;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = { };
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0", 
+
+   $msg = $main::line->dequeue_packet();
+
+   if (defined($msg)) {
+      my @fields = split(" ", $msg);
+      if ((defined($fields[0])) && ($fields[0] eq "LIGHT") && (defined($fields[1]))) {
+
+        Tosf::Table::TASK->reset("LIGHTTO");
+
+        if ($fields[1] eq "HG") {
+           LightsTL::Plant::SYSTEM->set_lights("gray", "gray", "green", "red", "gray", "gray");
+        } elsif ($fields[1] eq "HY") {
+           LightsTL::Plant::SYSTEM->set_lights("gray", "yellow", "gray", "red", "gray", "gray");
+        } elsif ($fields[1] eq "FG") {
+           LightsTL::Plant::SYSTEM->set_lights("red", "gray", "gray", "gray", "gray", "green");
+        } elsif ($fields[1] eq "FY") {
+           LightsTL::Plant::SYSTEM->set_lights("red", "gray", "gray", "gray", "yellow", "gray");
+        }
+      }
+   },
+
+   "S1"
+)
+
+mmt_TableRow(
+   "S1", 
+
+   $lightTo = Tosf::Table::SVAR->get_value("sv_lightTo");   
+
+   if ($lightTo) {
+      if ($flashOn) {
+         LightsTL::Plant::SYSTEM->set_lights("gray", "yellow", "gray", "red", "gray", "gray");
+         $flashOn = FALSE;
+      } else {
+         LightsTL::Plant::SYSTEM->set_lights("gray", "gray", "gray", "gray", "gray", "gray");
+         $flashOn = TRUE;
+      }
+   }
+
+   Tosf::Table::TASK->suspend("LIGHT"),
+
+   "S0"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+   
+   Tosf::Table::TASK->reset("LIGHTTO");
+)
+
+1;

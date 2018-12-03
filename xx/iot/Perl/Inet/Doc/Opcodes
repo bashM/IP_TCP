@@ -1,0 +1,101 @@
+Ethernet
+========
+Opcode = 0
+
+Input: Generic packet containing an Ip packet as payload.
+Action/
+Output: Add the IP packet to an Ethernet packet and write
+        to DEV ADT.
+
+Opcode = 1
+
+Input:  Generic Packet with read-from-device message as payload.
+Action/
+Output: Read Ethernet packet from DEV ADT.  
+        Add the Ethernet packet to a Generic packet and advance
+        the packet to its next handler (ETHERNET Opcode == 2).
+
+Opcode = 2 
+
+Input:  Generic packet containing an Ethernet packet as payload.
+Action/
+Output: If Ethernet packet is for localhost then
+           Extract payload packet from the Ethernet packet.  
+           Add payload packet to a Generic packet and 
+           advance the packet to its next handler
+        else
+           drop the Ethernet packet.
+
+Ip
+== 
+Opcode = 0 
+
+Input:  Generic packet containing an Ip packet as payload.
+Action: Route IP packet.
+        if 
+Output: Generic packet containing an Ip packet as payload
+Action: Route the Ip packet and advance the packet to the 
+        next packet handler.
+
+Opcode = 1 INSERT_ICMP_DATAGRAM_INTO_IP_DATAGRAM-ROUTE
+
+Input:  Generic packet containing an Icmp packet as payload.
+Output: Generic packet containing an Ip packet as payload.
+Action: Create an Ip packet, add Ip addresses and Icmp packet as payload.
+        Add Ip packet as payload to Generic packet and advance the packet
+        to the next packet handler.
+
+Opcode = 2 READ_IP_FRAME_FROM_DEV-DEMUX
+
+Input:  Generic Packet with read-from-device message as payload.
+Output: Generic Packet.
+Action: Read IP packet from DEV ADT.  
+        Insert into Generic packet and advance the packet 
+        to the next handler.
+
+Icmp
+====
+Opcode = 0 ICMP_DATAGRAM-ADVANCE_TO_IP 
+
+Input:  Generic packet containing  message as payload.
+Output: Generic packet containing an Icmp packet as payload.
+Action: Based on the Generic packet's payload message, create an
+        echo-request, echo-reply or time-exceeded Icmp packet.  Add Icmp
+        packet as payload to a Generic packet and advance the packet
+        to Ip.
+
+Opcode = 1 ICMP_DATAGRAM-DEMUX
+
+Input:  Generic packet containing an Icmp packet as payload.
+Output: Generic Packet.
+Action: De-multiplex Icmp packet to determine the packet's next handler.
+        Add appropriate payload to a Generic packet and advance the
+        packet to the next packet handler.
+
+Ping
+====
+Opcode = 0 PING_REQUEST-ADVANCE_TO_ICMP
+
+Input:  Generic packet containing a ping-request message as payload.
+Output: Generic packet containing an Icmp packet construction-request
+        message as payload.
+Action: Add construction-request message as payload to a Generic 
+        packet and advance the packet to Icmp.
+
+Opcode = 1 PING_REPLY-WRITE_TO_DEV
+
+Input:  Generic packet containing a ping-reply message as payload.
+Output: A formatted ping-reply string. 
+Action: Write the formatted string to DEV ADT.
+
+Pingd
+=====
+Opcode = 0 PING_REPLY-ADVANCE_TO_ICMP
+
+Input:  Generic packet containing a ping-reply message as payload.
+Output: Generic packet containing an  Icmp packet construction-request
+        message as payload.
+Action: Advance Generic packet to Icmp.
+Action: Add construction-request message as payload to a Generic 
+        packet and advance the packet to Icmp.
+

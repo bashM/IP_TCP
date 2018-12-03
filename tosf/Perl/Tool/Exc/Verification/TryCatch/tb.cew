@@ -1,0 +1,72 @@
+#================================================================--
+# File Name    : Exc/Verification/TryCatch/tb.cew
+#
+# Purpose      : unit testing
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#================================================================--
+
+$|=1;
+use strict;
+use warnings;
+
+include(cew.pl)
+
+use lib '../../../';
+use Exc::Exception;
+use Exc::TryCatch;
+use Try::Tiny;
+use AnyEvent;
+
+cew_Variables
+
+sub leaveScript {
+   cew_Summary
+   print("Bye\n");
+   exit(0);
+}
+
+$SIG{INT} = sub {leaveScript();};
+
+my $z_event;
+my $f_event;
+my $g_event;
+
+#begin implicit while (1) event loop ++++++++
+$z_event = AnyEvent->condvar;
+
+my $etime=10;
+
+$f_event = AnyEvent->timer (after => 1,
+   interval => 3,
+   cb => sub {
+      $etime--;
+      print("Test time remaining: ", $etime, " seconds \n");
+      cew_Ecase(die(Exc::Exception->new(name => "in cew")), "in cew")
+      if ($etime==0) {
+         leaveScript();
+       }
+                  
+   }
+);
+
+my $s0 = Exc::TryCatch->new(
+   fn => sub {
+      #die("Peter");
+      if (rand() < 0.5) {
+         cew_Ecase(die(Exc::Exception->new(name => "lol")), "lol")
+      }
+   }
+);
+
+$g_event = AnyEvent->timer (after => 1,
+   interval => 1,
+   cb => $s0->get_wfn()
+);
+
+#end implicit while (1) event loop ++++++++
+$z_event->recv;
+

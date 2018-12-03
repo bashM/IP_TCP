@@ -1,0 +1,279 @@
+package VHost::Fsm::IP;
+#================================================================--
+# File Name    : Fsm/IP.pm
+#
+# Purpose      : using IP to pass a packet.
+#
+# Author       : Basheer, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      dcbID => my $dcbID,
+      semID => my $semID
+   };
+
+   if (defined($params{taskID})) {
+      $self->{taskID} = $params{taskID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::IP->new  taskID undefined"));
+   }
+
+   if (defined($params{dcbID})) {
+      $self->{dcbID} = $params{dcbID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::IP->new  dcbID undefined"));
+   }
+
+   if (defined($params{semID})) {
+      $self->{semID} = $params{semID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::IP->new  semID undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+
+my %stdioLineParams = (
+   maxbuff => 10000,
+   inLeftFrame => '',
+   inRightFrame => "\n",
+   outLeftFrame => '',
+   outRightFrame => "\n"
+);
+
+   my $pkt;
+   my $msg_tag;
+   my $iface;
+   my $destnation;
+   my $ttl;
+   my $gateway;
+   my $generic_packet = Inet::Packet::Generic->new();
+   my $ip_packet = Inet::Packet::Ip->new();
+   my $icmp_packet = Inet::Packet::Icmp->new();
+   my $udp_packet = Inet::Packet::Udp->new();
+
+mmt_TableBegin 
+
+   my $ns;
+   
+
+mmt_TableRow(
+   "fetch", 
+       my $readSuccess;    
+       if(Inet::Table::DCB->get_opened($self->{dcbID})) {
+          $pkt = Tosf::Table::QUEUE->dequeue($self->{taskID});
+	  if((defined ($pkt))){
+	     $readSuccess = TRUE; 
+	     $generic_packet->decode($pkt);
+	     #$generic_packet->dump();
+	     $msg_tag = $generic_packet->get_opcode();
+	   
+	     if (defined ($msg_tag)){
+	        if($msg_tag eq "ICMP") {
+	           $ns = "ICMP";  
+   	        }elsif(($msg_tag eq "ETHERNET")||($msg_tag eq "P2P")){
+	           $ns = "ETHERNET_OR_P2P";
+	        }elsif($msg_tag eq "UDP") {
+	           $ns = "UDP";  
+	        }
+             }
+          }else{
+	     $readSuccess = FALSE;
+	     $ns = "fetch";
+             Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+          }
+       },
+     $ns
+)
+
+mmt_TableRow(
+   "ETHERNET_OR_P2P",         
+       
+      $ip_packet->decode($generic_packet->get_msg());
+      $generic_packet->set_src_ip($ip_packet->get_src_ip());
+      $generic_packet->set_dest_ip($ip_packet->get_dest_ip());
+      $generic_packet->set_interface($iface);
+      $generic_packet->set_gateway($gateway);
+      ($iface, $gateway) = Inet::Table::ROUTE->get_route($generic_packet->get_dest_ip());	
+      ($destnation) = Inet::Table::ROUTE->get_route($generic_packet->get_dest_ip());
+      
+      if (defined($iface) && ($iface ne 'lo')) {
+         (my $ts,  $ttl) = split(':', $generic_packet->get_msg());
+         $ttl = $ip_packet->get_ttl();
+         if($ttl > 1) {
+            $ttl = $ttl -1;
+            $ip_packet->set_ttl($ttl);
+
+            $generic_packet->set_msg($ip_packet->encode());
+
+            if(Inet::Table::NIC->get_type($iface) eq 'ethernet') {
+               $generic_packet->set_opcode("IP");
+               
+               Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP_TTL GOING TO ETHERNET -=-=-=-=-=-=\n", %stdioLineParams);
+            
+               Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+               Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem'); 
+            }else{
+               # p2p
+               $generic_packet->set_opcode("IP");
+               
+               Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP_TTL GOING TO P2P -=-=-=-=-=-=\n", %stdioLineParams);
+               
+               Tosf::Table::QUEUE->enqueue('hP2P', $generic_packet->encode());
+               Tosf::Table::SEMAPHORE->signal(semaphore => 'hP2pSem'); 
+            }
+         }else{
+            $generic_packet->set_msg(join(':',Inet::Table::NIC->get_ip($destnation),$ip_packet->get_src_ip(),$ip_packet->get_dest_ip() ));
+            $generic_packet->set_opcode("T_E");
+            
+            Inet::Table::DCB->enqueue_packet("stdio",  "=-=-=-=-=-=- IN IP_TTL GOING TO ICMP -=-=-=-=-=-=\n", %stdioLineParams);
+            
+            Tosf::Table::QUEUE->enqueue('hIcmp', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'icmpSem'); 
+         }
+
+      }elsif(defined($iface)){
+      
+         if($ip_packet->get_proto() eq 'ICMP') {
+            $icmp_packet->decode($ip_packet->get_msg());
+            $generic_packet->set_opcode("IP");
+            #$generic_packet->dump();
+            $generic_packet->set_msg($icmp_packet->encode());
+            
+            Inet::Table::DCB->enqueue_packet("stdio",  "=-=-=-=-=-=- IN IP GOING TO ICMP -=-=-=-=-=-=", %stdioLineParams);
+            
+            Tosf::Table::QUEUE->enqueue('hIcmp', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'icmpSem'); 
+         }elsif($ip_packet->get_proto() eq 'UDP'){
+               $udp_packet->decode($ip_packet->get_msg());
+               $generic_packet->set_opcode("IP");
+               $generic_packet->set_msg($udp_packet->encode());
+               
+               Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP_UDP GOING TO UDP -=-=-=-=-=-=", %stdioLineParams);
+			
+               Tosf::Table::QUEUE->enqueue('hUdp', $generic_packet->encode());
+               Tosf::Table::SEMAPHORE->signal(semaphore =>'hUdpSem');
+         }
+      }    
+      ,
+   "fetch"
+)
+
+mmt_TableRow(
+   "ICMP", 
+      
+      ($iface, $gateway) = Inet::Table::ROUTE->get_route($generic_packet->get_dest_ip());
+    
+      $generic_packet->set_interface($iface);
+      $generic_packet->set_gateway($gateway);
+	
+      if(defined($iface) && ($iface ne 'lo')) {
+         $ip_packet->set_msg($generic_packet->get_msg());
+         $ip_packet->set_src_ip(Inet::Table::NIC->get_ip($iface));
+         $ip_packet->set_dest_ip($generic_packet->get_dest_ip());
+         $ip_packet->set_ttl($generic_packet->get_ttl());
+         $ip_packet->set_proto('ICMP');
+          
+         if(defined ($ttl)&&($ttl !~ /\./)){
+	    $ip_packet->set_ttl($ttl);
+	 }
+	 $generic_packet->set_opcode("IP");
+         $generic_packet->set_msg($ip_packet->encode());
+         
+         if(Inet::Table::NIC->get_type($iface) eq 'ethernet') {
+		      
+            Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP GOING TO ETHERNET -=-=-=-=-=-=", %stdioLineParams);
+            
+            Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem'); 
+         }else {
+            
+            Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP GOING TO P2P -=-=-=-=-=-=", %stdioLineParams);
+            
+            Tosf::Table::QUEUE->enqueue('hP2P', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'hP2pSem'); 
+            ### Coming up soon!!  
+           
+         }
+      # Running back to the localHost. 
+      }elsif (defined($iface)) {
+         $generic_packet->set_src_ip($generic_packet->get_dest_ip());
+         $generic_packet->set_opcode("IP");
+       
+         Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP GOING TO ICMP -=-=-=-=-=-=", %stdioLineParams);
+         
+         Tosf::Table::QUEUE->enqueue('hIcmp', $generic_packet->encode());
+         Tosf::Table::SEMAPHORE->signal(semaphore => 'icmpSem'); 
+      }
+      ,
+   "fetch"
+)
+
+mmt_TableRow(
+   "UDP", 
+      
+      ($iface, $gateway) = Inet::Table::ROUTE->get_route($generic_packet->get_dest_ip());
+      $generic_packet->set_interface($iface);
+      $generic_packet->set_gateway($gateway);
+      
+      if (defined($iface) && ($iface ne 'lo')) {
+         $ip_packet->set_msg($generic_packet->get_msg());
+         $ip_packet->set_src_ip($generic_packet->get_src_ip());
+         $ip_packet->set_dest_ip($generic_packet->get_dest_ip());
+         $ip_packet->set_proto('UDP');
+         $generic_packet->set_msg($ip_packet->encode());
+         $generic_packet->set_opcode("IP");
+         
+         if (Inet::Table::NIC->get_type($iface) eq 'ethernet') {
+                   
+            Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP_UDP GOING TO ETHERNET -=-=-=-=-=-=", %stdioLineParams);
+            
+            Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem'); 
+         } else {
+            # p2p
+            Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP_UDP GOING TO P2P -=-=-=-=-=-=", %stdioLineParams);
+            
+            Tosf::Table::QUEUE->enqueue('hP2P', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'hP2pSem'); 
+         }
+      }elsif (defined($iface)) {
+         $generic_packet->set_opcode("IP");
+          
+         Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN IP_UDP GOING TO UDP -=-=-=-=-=-=", %stdioLineParams);
+			
+         Tosf::Table::QUEUE->enqueue('hUdp', $generic_packet->encode());
+         Tosf::Table::SEMAPHORE->signal(semaphore =>'hUdpSem');
+      }
+      ,
+   "fetch"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "fetch",
+
+   Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+
+)
+1;

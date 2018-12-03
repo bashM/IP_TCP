@@ -1,0 +1,37 @@
+#================================================================--
+# File Name    : Packet/Verification/Icmp/tb.cew
+#
+# Purpose      : unit testing
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#================================================================--
+
+$| = 1;
+use strict;
+use warnings;
+
+include(cew.pl)
+
+use lib '../../../../';
+use Tosf::Exception::Trap;
+use Inet::Packet::Icmp;
+use Try::Tiny;
+
+cew_Variables
+
+sub leaveScript {
+   cew_Summary
+   print("Bye\n");
+   exit(0);
+}
+
+$SIG{INT} = sub {leaveScript();};
+
+my $a = Inet::Packet::Icmp->new();
+
+cew_Ncase(, $a->packet_in_error(), 0)
+
+cew_Summary

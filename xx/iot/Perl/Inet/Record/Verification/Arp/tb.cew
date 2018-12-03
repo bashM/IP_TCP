@@ -1,0 +1,38 @@
+#================================================================--
+# File Name    : Record/Verification/Route/tb.cew
+#
+# Purpose      : unit testing
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#================================================================--
+
+$| = 1;
+use strict;
+use warnings;
+
+include(cew.pl)
+
+use lib '../../../../';
+use Tosf::Exception::Trap;
+use Inet::Record::Arp;
+use Try::Tiny;
+
+cew_Variables
+
+sub leaveScript {
+   cew_Summary
+   print("Bye\n");
+   exit(0);
+}
+
+$SIG{INT} = sub {leaveScript();};
+
+my $x = Inet::Record::Arp->new();
+$x->set_mac('23');
+
+cew_Ncase(, $x->get_mac(), '23')
+
+cew_Summary

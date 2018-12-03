@@ -1,0 +1,96 @@
+package Inet::Fsm::NODE;
+#================================================================--
+# File Name    : Fsm/NODE.pm
+#
+# Purpose      : NODE Controller
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskName => my $taskName = "Fsm::NODE::noname"
+   };
+
+   bless ($self, $class);
+   return $self;
+}
+
+my $gpkt; 
+my $pkt;
+my $raw;
+my @keys;
+my $k;
+my $readSuccess;
+my $msg;
+my $ns;
+my $iface;
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0",
+
+   $raw = Tosf::Table::MESSAGE->dequeue($self->{taskName});
+   $gpkt->decode($raw);
+   $iface = $gpkt->get_msg(),
+
+   "S1"
+)
+
+mmt_TableRow(
+   "S1", 
+   
+   $readSuccess = FALSE;
+   if (Inet::Table::IFACE->get_opened($iface)) {
+      $pkt = Inet::Table::IFACE->dequeue_packet($iface);
+      if (defined($pkt)) {
+         $readSuccess = TRUE;
+         if ($pkt ne 'heartbeat') {
+            @keys = Inet::Table::IFACE->get_keys();
+            foreach $k (@keys) {
+               if (($k ne $iface) && (Inet::Table::IFACE->get_opened($k)) ) {
+                  Inet::Table::IFACE->enqueue_packet($k, $pkt);
+               }
+            }
+         }
+      }
+   }
+
+   if (!$readSuccess) {
+      Tosf::Table::MESSAGE->wait($self->{taskName});
+      $ns = "S0";
+   } else {
+      $ns = "S1"
+   },
+
+   $ns
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+
+   $self->{taskName} = whoami();
+   Tosf::Table::MESSAGE->wait($self->{taskName});
+   $gpkt = Inet::Packet::Generic->new();
+
+)
+
+1;

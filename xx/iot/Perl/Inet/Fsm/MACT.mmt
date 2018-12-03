@@ -1,0 +1,52 @@
+package Inet::Fsm::MACT;
+#================================================================--
+# File Name    : Fsm/HBEAT.pm
+#
+# Purpose      : implements task HBEAT (heartbeat)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskName => my $taskName 
+   };
+
+   bless ($self, $class);
+   return $self;
+}
+
+
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0", 
+   Inet::Table::MAC->ticks();
+   Tosf::Table::TASK->suspend($self->{taskName}),
+
+   "S0"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+
+   $self->{taskName} = whoami();
+
+)
+
+1;

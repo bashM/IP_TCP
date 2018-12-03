@@ -1,0 +1,64 @@
+package Inet::Fsm::HBEAT;
+#================================================================--
+# File Name    : Fsm/HBEAT.pm
+#
+# Purpose      : implements task HBEAT (heartbeat)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskName => my $taskName 
+   };
+
+   bless ($self, $class);
+   return $self;
+}
+
+
+my $pkt;
+my @keys;
+my $k;
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0", 
+   
+   $pkt = "heartbeat";
+   my $k;
+   my @keys = Inet::Table::IFACE->get_keys();
+   foreach $k (@keys) {
+      if ((Inet::Table::IFACE->get_opened($k)) && (Inet::Table::IFACE->get_type($k) ne 'stream')) {
+         Inet::Table::IFACE->enqueue_packet($k, $pkt);
+      }
+   }
+
+   Tosf::Table::TASK->suspend($self->{taskName}),
+
+   "S0"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+
+   $self->{taskName} = whoami();
+
+)
+
+1;

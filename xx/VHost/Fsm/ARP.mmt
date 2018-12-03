@@ -1,0 +1,211 @@
+package VHost::Fsm::ARP;
+#================================================================--
+# File Name    : Fsm/ARP.pm
+#
+# Purpose      : ARO to Eth  passing a packet.
+#
+# Author       : Basheer, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      dcbID => my $dcbID,
+      semID => my $semID
+   };
+
+   if (defined($params{taskID})) {
+      $self->{taskID} = $params{taskID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::ETHERNET->new  taskID undefined"));
+   }
+
+   if (defined($params{dcbID})) {
+      $self->{dcbID} = $params{dcbID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::ETHERNET->new  dcbID undefined"));
+   }
+
+   if (defined($params{semID})) {
+      $self->{semID} = $params{semID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::ETHERNET->new  semID undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+
+my %stdioLineParams = (
+   maxbuff => 10000,
+   inLeftFrame => '',
+   inRightFrame => "\n",
+   outLeftFrame => '',
+   outRightFrame => "\n"
+);
+
+   my $pkt;
+   my $msg_tag;
+   my $generic_packet = Inet::Packet::Generic->new();
+   my $arp_packet = Inet::Packet::Arp->new();
+
+mmt_TableBegin 
+
+   my $ns;
+   
+mmt_TableRow(
+   "fetch", 
+	   my $readSuccess;    
+      if(Inet::Table::DCB->get_opened($self->{dcbID})) {
+	      $pkt = Tosf::Table::QUEUE->dequeue($self->{taskID});
+	   
+	      if((defined ($pkt))){
+	         $readSuccess = TRUE;
+	         $generic_packet->decode($pkt); 
+	         $msg_tag = $generic_packet->get_opcode();
+	         if (defined ($msg_tag)){
+	            if($msg_tag eq "IP") {
+	               $ns = "IP";  
+   	         }elsif($msg_tag eq "ETHERNET"){
+	               $ns = "ETHERNET";
+	            }elsif($msg_tag eq "TIMER"){
+	               $ns = "TIMER";
+	            }   
+	         }
+         }else{
+	         $readSuccess = FALSE;
+	         $ns = "fetch";
+            Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+         }
+ 	   },
+      $ns
+)
+
+mmt_TableRow(
+   "IP", 
+      
+      my $dest;
+      my $src = $generic_packet->get_src_ip();
+      if($generic_packet->get_gateway() eq '0.0.0.0') {
+         $dest = $generic_packet->get_dest_ip();
+      }else{
+         $dest = $generic_packet->get_gateway();
+      }
+      Tosf::Table::QUEUE->enqueue($dest, $generic_packet->encode());
+      Inet::Table::ARP->set_mac($dest, 'no_mac');
+     
+      $arp_packet->set_src_ip($src);
+      $arp_packet->set_dest_ip($dest);
+      $arp_packet->set_src_mac(Inet::Table::NIC->get_mac($generic_packet->get_interface()));
+      $arp_packet->set_dest_mac('0.0.0.0');
+      $arp_packet->set_opcode('request');
+      $generic_packet->set_opcode("ARP");
+      $generic_packet->set_msg($arp_packet->encode());
+      #$arp_packet->dump();
+     
+      Inet::Table::DCB->enqueue_packet("stdio","=-=-=-=-=-=- IN ARP GOING TO ETHERNET -=-=-=-=-=-=", %stdioLineParams);
+            
+      Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+      Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem');
+      ,
+   "fetch"
+)
+
+mmt_TableRow(
+   "ETHERNET",         
+
+      $arp_packet-> decode($generic_packet->get_msg());
+      if ($arp_packet->get_opcode()eq 'request'){
+              
+         my $destnation_Ip = $arp_packet->get_dest_ip();
+         my $l =Inet::Table::NIC->get_ip($generic_packet->get_interface());
+         
+         if($destnation_Ip eq $l){
+            my $s_mac = $arp_packet->get_src_mac();
+            my $d_mac = Inet::Table::NIC->get_mac($generic_packet->get_interface());
+            $arp_packet->set_dest_ip($arp_packet->get_src_ip());
+            $arp_packet->set_src_ip($destnation_Ip);
+            $arp_packet->set_dest_mac($s_mac);
+            $arp_packet->set_src_mac($d_mac);
+            $arp_packet->set_opcode('reply');
+            $generic_packet->set_msg($arp_packet->encode());
+            $generic_packet->set_opcode("ARP");
+            #$arp_packet->dump();
+                    
+            Inet::Table::DCB->enqueue_packet("stdio","=-=-=-=-=-=- IN ARP GOING TO ETHERNET -=-=-=-=-=-=", %stdioLineParams);
+                    
+            Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+            Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem');
+         }
+
+      }elsif($arp_packet->get_opcode()eq 'reply'){
+         
+         $arp_packet-> decode($generic_packet->get_msg());
+         my $d_ip = $arp_packet->get_dest_ip();
+         my $s_ip = $arp_packet->get_src_ip();
+         my $d_mac = $arp_packet->get_dest_mac();
+         my $s_mac = $arp_packet->get_src_mac();
+         my $p = (Tosf::Table::QUEUE->dequeue($s_ip));
+         $generic_packet->decode($p);
+         Inet::Table::ARP->set_mac($s_ip, $s_mac);
+         $generic_packet->set_opcode("IP");
+         # $generic_packet->dump();
+               
+         Inet::Table::DCB->enqueue_packet("stdio","=-=-=-=-=-=- IN ARP GOING TO ETHERNET -=-=-=-=-=-=", %stdioLineParams);
+                    
+         Tosf::Table::QUEUE->enqueue('hEth', $generic_packet->encode());
+         Tosf::Table::SEMAPHORE->signal(semaphore => 'hEthSem');
+      }
+      #$ethernet_packet-> ($arp_packet->set_src_mac);
+      #$ethernet_src_mac-> ("Arp");
+            
+      #Inet::Table::NIC->enqueue_packet($generic_packet->get_interface(), $ethernet_packet->encode());
+      ,
+   "fetch"
+)
+mmt_TableRow(
+
+    "TIMER",
+        my $ip = $generic_packet->get_msg();
+        my $p = (Tosf::Table::QUEUE->dequeue($ip));
+        $generic_packet->decode($p);
+         
+        my $d_ip = $generic_packet->get_dest_ip();
+        my $s_ip = $generic_packet->get_src_ip();
+        $ip = Inet::Table::NIC->get_ip($generic_packet->get_interface());
+         
+        $generic_packet->set_opcode("H_U");
+        $generic_packet->set_msg(join(':',$ip, $s_ip, $d_ip));
+        
+        Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN ARP GOING TO ICMP -=-=-=-=-=-=", %stdioLineParams);
+         
+        Tosf::Table::QUEUE->enqueue('hIcmp', $generic_packet->encode());
+        Tosf::Table::SEMAPHORE->signal(semaphore => 'icmpSem'); 
+      ,  
+   "fetch"
+)         
+mmt_TableEnd 
+
+mmt_Reset(
+   "fetch",
+
+   Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+
+)
+1;

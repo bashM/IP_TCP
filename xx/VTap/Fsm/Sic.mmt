@@ -1,0 +1,104 @@
+package VTap::Fsm::Sic;
+#================================================================--
+# File Name    : Fsm/Sic.pm
+#
+# Purpose      : stream Interface Controller
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      dcbID => my $dcbID,
+      semID => my $semID
+   };
+
+   if (defined($params{taskID})) {
+      $self->{taskID} = $params{taskID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::Sic->new  taskID undefined"));
+   }
+
+   if (defined($params{dcbID})) {
+      $self->{dcbID} = $params{dcbID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::Sic->new  dcbID undefined"));
+   }
+
+   if (defined($params{semID})) {
+      $self->{semID} = $params{semID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::Sic->new  semID undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+   my $pkt;
+   my $helpMsg = "help: (h)elp (s)end [message] (d)isplay tap port (q)uit ";
+   my @keys;
+   my $k;
+   my $readSuccess;
+
+mmt_TableRow(
+   "S0", 
+   
+   $readSuccess = FALSE;
+   if (Inet::Table::DCB->get_opened($self->{dcbID})) {
+      $pkt = Inet::Table::DCB->dequeue_packet($self->{dcbID});
+      if (defined($pkt)) {
+         $readSuccess = TRUE;
+         if (length($pkt) == 0) {
+            Inet::Table::DCB->enqueue_packet($self->{dcbID}, " ");
+         } elsif ($pkt eq 'h') {
+            Inet::Table::DCB->enqueue_packet($self->{dcbID}, $helpMsg);
+         } elsif ($pkt eq 's') {
+            Inet::Table::DCB->enqueue_packet($self->{dcbID}, "send:coming soon");
+         } elsif ($pkt eq 'd') {
+            my $h = VTap::Collection::HOST->get_host();
+            my $p = VTap::Collection::HOST->get_port();
+            Inet::Table::DCB->enqueue_packet($self->{dcbID}, "display: $h:$p");
+         } elsif ($pkt eq 'q') {
+            main::leaveScript();
+         } else {
+            Inet::Table::DCB->enqueue_packet($self->{dcbID}, "invalid command: type h for help");
+         }
+      }
+   }
+
+   if (!$readSuccess) {
+      Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+   },
+
+   "S0"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+
+   Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+
+)
+
+1;

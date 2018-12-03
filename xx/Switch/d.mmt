@@ -1,0 +1,103 @@
+package VSwitch::Fsm::Conn;
+#========================================================
+# Project      : Time Oriented Software Framework
+# File Name    : Fsm/HBeat.pm
+# Purpose      : Packet controller
+# Author       : Daniel Guenther, Vancouver Island University
+# Class        : CSCI 460 - Networking
+# System       : Perl (Linux)
+#========================================================
+
+$| = 1;
+use strict;
+use warnings;
+use constant PCHAR => '_I_';
+use constant BROADCAST => "ffff";
+use constant DEBUG => 0;
+sub dprint{ print @_ if DEBUG; }
+
+include(mmt.pl)
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      nicID => my $nicID,
+      macTable => my $macTable,
+   };
+
+   die(Tosf::Exception::Trap->new(name => "Fsm::Conn->new  taskID undefined")) unless defined($params{taskID});
+   die(Tosf::Exception::Trap->new(name => "Fsm::Conn->new  nicID undefined")) unless defined($params{nicID});
+
+   $self->{taskID} = $params{taskID};
+   $self->{nicID} = $params{nicID};
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin
+
+   my $pkt_str;
+   my @keys;
+   my $k;
+
+mmt_TableRow(
+   "S0",
+
+   if (VSwitch::Table::NIC->get_open($self->{nicID})) {
+      $pkt_str = VSwitch::Table::NIC->dequeue_packet($self->{nicID});
+      if ((defined($pkt_str)) && (length($pkt_str) != 0) && (!($pkt_str eq "heartbeat")))
+      {
+         # construct Ethernet packet with relevant fields
+         my $eth_pkt = Inet::Packet::Ethernet->new();
+
+         $eth_pkt->decode($pkt_str);
+
+         # check if we have a device with the given MAC connected to a port
+         my $dest_connected = 0;
+         @keys = VSwitch::Table::NIC->get_keys();
+         foreach $k (@keys) {
+            dprint("checking host: " .VSwitch::Table::NIC->get_mac($k) . "\n");
+            dprint("to mac : " .$eth_pkt->get_dest_mac() . "\n");
+            if (VSwitch::Table::NIC->get_mac($k) eq $eth_pkt->get_dest_mac())
+            {
+               $dest_connected = 1;
+            }
+         }
+
+         @keys = VSwitch::Table::NIC->get_keys();
+         foreach $k (@keys) {
+            # send message to the port of the corresponding MAC address
+            if (VSwitch::Table::NIC->get_open($k)
+                && (!$dest_connected
+                    || VSwitch::Table::NIC->get_mac($k) eq $eth_pkt->get_dest_mac()
+                    || BROADCAST eq $eth_pkt->get_dest_mac()))
+            {
+               VSwitch::Table::NIC->enqueue_packet($k, $eth_pkt->encode());
+            }
+         }
+
+         dprint("isequal: " . ($eth_pkt->get_src_mac() eq VSwitch::Table::NIC->get_mac($self->{nicID})) . "\n");
+         dprint("dest_connected: " . $dest_connected . " packet source: ". $eth_pkt->get_dest_mac() . " mac: " . VSwitch::Table::NIC->get_mac($self->{nicID}) . "\n");
+
+         # set the mac address on this port
+         VSwitch::Table::NIC->set_mac($self->{nicID}, $eth_pkt->get_src_mac());
+      }
+   }
+
+   Tosf::Table::TASK->suspend($self->{taskID}),
+
+   "S0"
+)
+
+mmt_TableEnd
+
+mmt_Reset(
+   "S0",
+
+)
+
+1;

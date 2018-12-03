@@ -1,0 +1,118 @@
+package LightsDI_155::Fsm::LIGHT;
+#================================================================--
+# File Name    : LIGHT.pm
+#
+# Purpose      : implements task LIGHT (light activation)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant TRUE => 1;
+use constant FALSE => 0;
+# for a 5V system
+use constant LOGIC_1_TRESHOLD => 2.8;
+
+my $flashOn = TRUE;
+my $lightTo;
+my $msg;
+my $qa = 0;
+my $qb = 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = { };
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0", 
+
+   $msg = $main::line->dequeue_packet();
+
+   if (defined($msg)) {
+
+      my @sensor_data = split(' ', $msg);
+
+      if (Scalar::Util::looks_like_number($sensor_data[0]) && Scalar::Util::looks_like_number($sensor_data[1])) {
+
+         $main::line->flushInbuff();
+
+         if ($sensor_data[0] > LOGIC_1_TRESHOLD) {
+            $qa = 1;
+         } else {
+            $qa = 0;
+         }
+
+         if ($sensor_data[1] > LOGIC_1_TRESHOLD) {
+            $qb = 1;
+         } else {
+            $qb = 0;
+         }
+
+
+         Tosf::Table::TASK->reset("LIGHTTO");
+
+         # HG
+         if ((!$qa) && (!$qb)) {
+            LightsDI_155::Plant::SYSTEM->set_lights("gray", "gray", "green", "red", "gray", "gray");
+         # HY
+         } elsif ((!$qa) && ($qb)) {
+            LightsDI_155::Plant::SYSTEM->set_lights("gray", "yellow", "gray", "red", "gray", "gray");
+         # FY
+         } elsif (($qa) && (!$qb)) {
+            LightsDI_155::Plant::SYSTEM->set_lights("red", "gray", "gray", "gray", "yellow", "gray");
+         # FG
+         } elsif (($qa) && ($qb)) {
+            LightsDI_155::Plant::SYSTEM->set_lights("red", "gray", "gray", "gray", "gray", "green");
+         }
+      }
+
+   },
+
+   "S1"
+)
+
+mmt_TableRow(
+   "S1", 
+
+   $lightTo = Tosf::Table::SVAR->get_value("sv_lightTo");   
+
+   if ($lightTo) {
+      if ($flashOn) {
+         LightsDI_155::Plant::SYSTEM->set_lights("gray", "yellow", "gray", "red", "gray", "gray");
+         $flashOn = FALSE;
+      } else {
+         LightsDI_155::Plant::SYSTEM->set_lights("gray", "gray", "gray", "gray", "gray", "gray");
+         $flashOn = TRUE;
+      }
+   }
+
+   Tosf::Table::TASK->suspend("LIGHT"),
+
+   "S0"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+   
+   Tosf::Table::TASK->reset("LIGHTTO");
+)
+
+1;

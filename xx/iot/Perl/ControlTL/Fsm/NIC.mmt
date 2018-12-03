@@ -1,0 +1,125 @@
+package ControlTL::Fsm::NIC;
+#================================================================--
+# File Name    : ControlTL::Fsm/NIC.pm
+#
+# Purpose      : implements task NIC 
+#                (network interface controller)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant MAXLEN => 100;
+
+my $soc = undef;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+ my $self = {};
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+   my $ns;
+   my $nicTo;
+
+mmt_TableRow(
+   "RW", 
+   
+   $nicTo = Tosf::Table::SVAR->get_value("sv_nicTo");
+
+   if (!$nicTo) {
+      my $buff;
+
+      $soc->read($buff, MAXLEN);
+
+      if ((defined($buff)) && (length($buff) != 0)) {
+         $main::line->enqueue_packet_fragment($buff);
+         Tosf::Table::TASK->reset("NICTO");
+      }
+
+      $buff = $main::line->dequeue_packet_fragment(MAXLEN);
+  
+      if (defined($buff)) {
+         $soc->write($buff);
+      }
+
+      $ns = "RW";
+   } else {
+      $ns = "OPEN";
+   }
+
+   Tosf::Table::TASK->suspend("NIC"),
+
+   $ns
+)
+
+mmt_TableRow(
+   "WAIT", 
+
+   $main::line->flush();
+
+   $nicTo = Tosf::Table::SVAR->get_value("sv_nicTo");
+
+   if ($nicTo) {
+      $ns = "OPEN";
+   } else {
+      $ns = "WAIT";
+   }
+
+   Tosf::Table::TASK->suspend("NIC"),
+
+   $ns
+)
+
+mmt_TableRow(
+   "OPEN", 
+
+   undef($soc); 
+
+   print("Try to open socket\n");
+   $soc = new IO::Socket::INET (
+      PeerAddr => 'localhost',
+      PeerPort => '5071',
+      Proto => 'tcp',
+      Timeout  => 0.5,
+      Blocking => 0
+   );
+
+   if (!defined($soc)) {
+      print("Failed to open\n");
+      $ns = "WAIT";
+   } else {
+      print("Open\n");
+      $ns = "RW";
+   }
+
+   Tosf::Table::TASK->suspend("NIC");
+   Tosf::Table::TASK->reset("NICTO"),
+
+   $ns
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "OPEN",
+
+   Tosf::Table::TASK->reset("NICTO"),
+
+)
+
+1;

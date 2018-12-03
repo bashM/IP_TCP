@@ -1,0 +1,167 @@
+package VHost::Fsm::UDP;
+#================================================================--
+# File Name    : VHost/Fsm/UDP.pm
+#
+# Purpose      : UDP.pm
+#
+# Author       : Basheer, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      dcbID => my $dcbID,
+      semID => my $semID
+   };
+
+   if (defined($params{taskID})) {
+      $self->{taskID} = $params{taskID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::ICMP->new  taskID undefined"));
+   }
+
+   if (defined($params{dcbID})) {
+      $self->{dcbID} = $params{dcbID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::ICMP->new  dcbID undefined"));
+   }
+
+   if (defined($params{semID})) {
+      $self->{semID} = $params{semID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::ICMP->new  semID undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+my %stdioLineParams = (
+   maxbuff => 10000,
+   inLeftFrame => '',
+   inRightFrame => "\n",
+   outLeftFrame => '',
+   outRightFrame => "\n"
+);
+
+   my $pkt;
+   my $msg_tag;
+   my $generic_packet = Inet::Packet::Generic->new();
+   my $udp_packet = Inet::Packet::Udp->new();
+
+mmt_TableBegin 
+   
+   my $ns;
+   
+mmt_TableRow(
+   "fetch", 
+	
+      my $readSuccess;    
+      if(Inet::Table::DCB->get_opened($self->{dcbID})) {
+	      $pkt = Tosf::Table::QUEUE->dequeue($self->{taskID});
+	      if((defined ($pkt))){
+	         $readSuccess = TRUE;
+	         $generic_packet->decode($pkt);
+	         #$generic_packet->dump();
+	         $msg_tag = $generic_packet->get_opcode();
+	   
+	         if (defined ($msg_tag)){
+	            if($msg_tag eq "IP") {
+	               $ns = "IP";  
+   	         }elsif(($msg_tag eq "INC")||($msg_tag eq "INCD")){
+	               $ns = "INC_OR_INCD";
+	            }
+	         }
+         }else{
+	         $readSuccess = FALSE;
+	         $ns = "fetch";
+            Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+         }
+ 	},
+   $ns
+)
+
+mmt_TableRow(
+   "INC_OR_INCD", 
+   	
+   	my $msg = $generic_packet->get_msg();
+        if (defined($msg)){
+            $udp_packet->set_msg($msg);
+        }else{
+            $msg = 0;
+            $udp_packet->set_msg($msg);
+         }
+         if($generic_packet->get_opcode() eq "INCD"){
+            my $d = $udp_packet->get_dest_port();
+            my $s = $udp_packet->get_src_port();
+            $udp_packet->set_src_port($d);
+            $udp_packet->set_dest_port($s);
+         }
+         $generic_packet->set_opcode("UDP");
+         $generic_packet->set_msg($udp_packet->encode());
+         
+         Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN UDP GOING TO IP -=-=-=-=-=-=", %stdioLineParams);
+	
+	 Tosf::Table::QUEUE->enqueue('hIp',$generic_packet->encode());
+	 Tosf::Table::SEMAPHORE->signal(semaphore => 'ipSem');
+      ,
+   "fetch"
+)
+
+mmt_TableRow(
+   "IP", 
+     
+      $udp_packet->decode($generic_packet->get_msg());
+      #$udp_packet->dump();
+      $generic_packet->set_msg($udp_packet->get_msg());
+      $generic_packet->set_opcode("UDP");
+     
+      if($udp_packet->get_dest_port() eq 70) {
+
+         Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN UDP GOING TO INCD -=-=-=-=-=-=", %stdioLineParams);
+	
+	 Tosf::Table::QUEUE->enqueue('hIncd', $generic_packet->encode());
+         Tosf::Table::SEMAPHORE->signal(semaphore => 'IncdSem');
+
+      }elsif($udp_packet->get_dest_port() eq 30){
+
+	 #$generic_packet->set_opcode("SIC");
+			
+	 Inet::Table::DCB->enqueue_packet("stdio","=-=-=-=-=-=- IN UDP GOING TO SIC -=-=-=-=-=-=", %stdioLineParams);
+	 
+	 Tosf::Table::QUEUE->enqueue('hInc', $generic_packet->encode());
+         Tosf::Table::SEMAPHORE->signal(semaphore => 'IncSem');
+         #Inet::Table::DCB->enqueue_packet("stdio", "RAW FROM Socket " . $generic_packet->get_msg(), %stdioLineParams);
+
+      }
+      ,
+   "fetch"
+)
+
+
+
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "fetch",
+
+   Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+
+)
+1;
+   

@@ -1,0 +1,20 @@
+Wiki Trace Example from
+https://en.wikipedia.org/wiki/Earliest_deadline_first_scheduling
+(see trace.pdf for traces worked out by hand)
+
+trace.1 contains a trace of task FOO using EDF scheduling.  It is
+the example trace from the wiki page on EDF schedulings using
+maxConcurrentTasks = 1.
+
+trace.2 contains a trace of task FOO using EDF scheduling.  It is
+the example trace from the wiki page on EDF schedulings using
+maxConcurrentTasks = 2.
+
+trace.3 contains a trace of task FOO using RM scheduling.  It is
+the example trace from the wiki page on EDF schedulings using
+maxConcurrentTasks = 1.
+
+To reproduce these traces,
+   - uncomment the print statements in Tosf::Executive/SCHEDULER.pm
+   - in main.pl, modify the variables $schedulingAlgorithm and $maxConcurrentTasks
+

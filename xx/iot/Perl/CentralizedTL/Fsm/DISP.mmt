@@ -1,0 +1,67 @@
+package CentralizedTL::Fsm::DISP;
+#================================================================--
+# File Name    : CONN.pm
+#
+# Purpose      : implements task CONN (controller)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+   };
+
+   bless ($self, $class);
+   return $self;
+}
+
+my $cout = "HG";
+
+mmt_TableBegin 
+
+my $nout; 
+
+mmt_TableRow(
+   "S0",
+   
+   $nout = Tosf::Table::QUEUE->dequeue("TLQ");
+   if (defined($nout) && ($nout ne $cout)) {
+      if ($nout eq "HG") { 
+         CentralizedTL::Plant::SYSTEM->set_lights("gray", "gray", "green", "red", "gray", "gray"); 
+      } elsif ($nout eq "HY") {
+         CentralizedTL::Plant::SYSTEM->set_lights("gray", "yellow", "gray", "red", "gray", "gray"); 
+      } elsif ($nout eq "FG") {
+         CentralizedTL::Plant::SYSTEM->set_lights("red", "gray", "gray", "gray", "gray", "green");
+      } elsif ($nout eq "FY") {
+         CentralizedTL::Plant::SYSTEM->set_lights("red", "gray", "gray", "gray", "yellow", "gray"); 
+      }
+      $cout = $nout;
+      Tosf::Table::SEMAPHORE->wait(semaphore => "TL", task => "DISP");
+   },
+      
+   "S0"
+   
+)
+
+mmt_TableEnd
+
+mmt_Reset(
+   "S0",
+
+   CentralizedTL::Plant::SYSTEM->set_lights("gray", "gray", "green", "red", "gray", "gray"); 
+
+)
+
+1;

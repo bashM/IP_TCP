@@ -1,0 +1,41 @@
+#================================================================--
+# File Name    : Packet/Verification/Ip/tb.cew
+#
+# Purpose      : unit testing
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#================================================================--
+
+$| = 1;
+use strict;
+use warnings;
+
+include(cew.pl)
+
+use lib '../../../../';
+use Tosf::Exception::Trap;
+use Inet::Packet::Ip;
+use Try::Tiny;
+
+cew_Variables
+
+sub leaveScript {
+   cew_Summary
+   print("Bye\n");
+   exit(0);
+}
+
+$SIG{INT} = sub {leaveScript();};
+
+my $x = Inet::Packet::Ip->new();
+my $y = Inet::Packet::Ip->new();
+$y->set_src_ip("192.168.18.21");
+my $message = $y->encode();
+$y->set_src_ip("hhhhhhh");
+$y->decode($message);
+cew_Ncase(, $y->get_src_ip(), '192.168.18.21')
+
+cew_Summary

@@ -1,0 +1,40 @@
+   # ================ STREAM =================
+  
+   Inet::Table::IFACE->set_type("str0", 'stream');
+   Tosf::Table::TASK->new(
+      name => "Str0T", 
+      periodic => TRUE, 
+      period => Tosf::Executive::TIMER->s2t(IFACEPOLLFREQ),
+      deadline => Tosf::Executive::TIMER->s2t(IFACEPOLLFREQ),
+      run => TRUE,
+      fsm => Inet::Fsm::StreamCon->new(
+         iface => "str0",
+         handlerName => "Stream",
+      )
+   );
+   Tosf::Table::TASK->reset("Str0T");
+
+   Tosf::Table::TASK->new(
+      name => "Stream",
+      periodic => FALSE,
+      run => FALSE,
+      fsm => inetApp::Fsm::STRAEMNODE->new()
+   );
+   Tosf::Table::TASK->reset("Stream");
+
+   # ================ HEARTBEAT =================
+  
+   Tosf::Table::TASK->new(
+      name => "HBeatT",
+      periodic => TRUE,
+      period => Tosf::Executive::TIMER->s2t(20),
+      deadline => Tosf::Executive::TIMER->s2t(0.5),
+      run => TRUE,
+      fsm => Inet::Fsm::HBEAT->new()
+   );
+
+   Tosf::Table::TASK->reset("HBeatT");
+
+}
+
+1;

@@ -1,0 +1,158 @@
+package LightsDI_155::Fsm::SIC;
+#================================================================--
+# File Name    : SIC.pm
+#
+# Purpose      : implements task SIC 
+#                (serial (DA-155)  interface controller)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant MAXLEN => 1000;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+ my $self = {};
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+   my $ns;
+   my $sicTo;
+
+mmt_TableRow(
+   "READ", 
+   
+   $sicTo = Tosf::Table::SVAR->get_value("sv_sicTo");
+
+   if (!$sicTo) {
+
+      my $buff;
+      my $buffLen;
+      my $throwAway = 0;
+
+      ($buffLen, $buff) = $main::serialPort->read(MAXLEN);
+
+      if ((defined($buff)) && ($buffLen != 0)) {
+
+         if (!$throwAway) {
+            $main::line->enqueue_packet_fragment($buff);
+            $throwAway = 1;
+         }
+
+         Tosf::Table::TASK->reset("SICTO");
+      }
+
+      $buff = $main::line->dequeue_packet_fragment(20);
+      if (defined($buff)) {
+         $main::serialPort->write("$buff");
+      }
+
+      #note output to the serial line
+      #is no sent to outbuff and then to
+      #the serial line rather, it is sent directly to
+      #the serial line bypassing output.
+
+      $ns = "READ";
+   } else {
+      $ns = "OPEN";
+   }
+
+   Tosf::Table::TASK->suspend("SIC"),
+
+   $ns
+)
+
+mmt_TableRow(
+   "WAIT", 
+
+   $sicTo = Tosf::Table::SVAR->get_value("sv_sicTo");
+
+   $main::line->flushInbuff();
+
+   if ($sicTo) {
+      $ns = "OPEN";
+   } else {
+      $ns = "WAIT";
+   }
+
+   Tosf::Table::TASK->suspend("SIC"),
+
+   $ns
+)
+
+mmt_TableRow(
+   "OPEN", 
+
+   undef($main::serialPort); 
+
+   print("Try to open Serial Port\n");
+   $main::serialPort = Device::SerialPort->new("/dev/ttyACM0");
+
+   if (!defined($main::serialPort)) {
+      print("Failed to open\n");
+      $ns = "WAIT";
+   } else {
+
+      print("Open\n");
+
+      $ns = "READ";
+
+      $main::line->enqueue_packet("info 1 ");
+     
+      #$main::serialPort->write("info 1 " . "\r");
+      
+      $main::line->enqueue_packet("asc ");
+      #$main::serialPort->write("asc " . "\r");
+
+      #$main::serialPort->write("R1 " . "\r");
+      $main::line->enqueue_packet("R1 ");
+
+
+      #scan rate of approx 11Hz
+      #$main::serialPort->write("srate xffdc " . "\r");
+      $main::line->enqueue_packet("srate xfffdc ");
+
+      #$main::serialPort->write("slist 0 x0100 " . "\r"); # analog 25v ch 1
+      $main::line->enqueue_packet("slist 0 x0100 "); # analog 25v ch 1
+
+      #$main::serialPort->write("slist 1 x0101 " . "\r"); # analog 25v ch 2
+      $main::line->enqueue_packet("slist 1 x0101 "); # analog 25v ch 2
+
+      #$main::serialPort->write("float " . "\r");
+      $main::line->enqueue_packet("float "); 
+
+      #$main::serialPort->write("start " . "\r");
+      $main::line->enqueue_packet("start "); 
+   }
+
+   Tosf::Table::TASK->suspend("SIC");
+   Tosf::Table::TASK->reset("SICTO"),
+
+   $ns
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "OPEN",
+
+   Tosf::Table::TASK->reset("SICTO"),
+
+)
+
+1;

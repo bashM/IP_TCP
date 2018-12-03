@@ -1,0 +1,4 @@
+See csci355 Lab9.
+This version is set up to take state input from a DI_155. The state
+encoding is given in the statement of Lab9. Note, the flashing light
+behaviour is not part of the original specification.

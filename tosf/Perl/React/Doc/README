@@ -1,0 +1,29 @@
+Reaction Monitoring System
+==========================
+
+React is a reaction monitoring system.  It is a centralized system
+similar to CentralizedTL.  The system consists of  three status lights
+(green light, amber light and red light) and one "clicable" input X.
+
+X is displayed as a "clicable" button.  It is considered OFF (logic value
+0) when it has a white background and ON (logic value 1) when it has a
+black background.  The status lights can be either ON (illuminated)
+or OFF.
+
+Initially, the amber light and the green light are OFF and the red light
+is ON.  After 5 seconds and once X is "clicked" ON, the red light is
+turned OFF and the amber light is turned ON. After a further delay of
+10 seconds, the amber light is turned OFF, the green light is turned ON
+and, a timer is started. Once X is "clicked" OFF the timer is stopped,
+the elapsed time is displayed to standard-out and the system returns
+to its initial state.  If X is "clicked" OFF before the green light
+is turned ON then a "premature clicking" error message is written to
+standard-out and the systems returns to its initial state.  If X is not
+"clicked" OFF within 10 seconds of the green light being turned ON then a
+"timeout" error message is written to standard-out and the system returns
+to its initial state.
+
+Notes:
+
+The average human reaction time is 0.2 seconds. 
+

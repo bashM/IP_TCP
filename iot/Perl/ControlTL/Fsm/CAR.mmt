@@ -1,0 +1,81 @@
+package ControlTL::Fsm::CAR;
+#================================================================--
+# File Name    : ControlTL::Fsm/CAR.pm
+#
+# Purpose      : implements task CAR  (car detection)
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant TRUE => 1;
+use constant FALSE => 0;
+
+my $carTo;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = { };
+
+   bless ($self, $class);
+   return $self;
+}
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0", 
+   
+   my $msg = $main::line->dequeue_packet();
+
+   if (defined($msg)) {
+      my @fields = split(" ", $msg);
+      if ((defined($fields[0])) && ($fields[0] eq "CONTROL") && (defined($fields[1]))) {
+
+         Tosf::Table::TASK->reset("CARTO");
+
+        if ($fields[1] eq "CARON") {
+           Tosf::Table::SVAR->assign("sv_car", 1);
+        } elsif ($fields[1] eq "CAROFF") {
+           Tosf::Table::SVAR->assign("sv_car", 0);
+        }
+      }
+   }, 
+
+   "S1"
+)
+
+mmt_TableRow(
+   "S1",
+
+   $carTo = Tosf::Table::SVAR->get_value("sv_carTo");
+
+   if ($carTo) {
+      Tosf::Table::SVAR->assign("sv_car", 1);
+      Tosf::Table::TASK->reset("CARTO");
+   } 
+
+   Tosf::Table::TASK->suspend("CAR"),
+
+   "S0"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+   
+   Tosf::Table::TASK->reset("CARTO");
+)
+
+1;

@@ -1,0 +1,143 @@
+package VHost::Fsm::P2P;
+#================================================================--
+# File Name    : Fsm/IP.pm
+#
+# Purpose      : using IP to pass a packet.
+#
+# Author       : Basheer, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskID => my $taskID,
+      dcbID => my $dcbID,
+      semID => my $semID
+   };
+
+   if (defined($params{taskID})) {
+      $self->{taskID} = $params{taskID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::P2P->new  taskID undefined"));
+   }
+
+   if (defined($params{dcbID})) {
+      $self->{dcbID} = $params{dcbID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::P2P->new  dcbID undefined"));
+   }
+
+   if (defined($params{semID})) {
+      $self->{semID} = $params{semID};
+   } else {
+      die(Tosf::Exception::Trap->new(name => "Fsm::P2P->new  semID undefined"));
+   }
+
+   bless ($self, $class);
+   return $self;
+}
+
+   #my $ETHERNET;
+   #my $ICMP;
+   #my $iface;
+   #my $gateway;
+   #my $ip;
+
+my %stdioLineParams = (
+   maxbuff => 10000,
+   inLeftFrame => '',
+   inRightFrame => "\n",
+   outLeftFrame => '',
+   outRightFrame => "\n"
+);
+
+   my $pkt;
+   my $msg_tag;
+   my $iface;
+   my $gateway;
+   my $generic_packet = Inet::Packet::Generic->new();
+   my $ip_packet = Inet::Packet::Ip->new();
+   my $icmp_packet = Inet::Packet::Icmp->new();
+
+mmt_TableBegin 
+
+   my $ns;
+   
+mmt_TableRow(
+   "fetch", 
+	   my $readSuccess;    
+      if(Inet::Table::DCB->get_opened($self->{dcbID})) {
+	      $pkt = Tosf::Table::QUEUE->dequeue($self->{taskID});
+	      if((defined ($pkt))){
+	         $readSuccess = TRUE; 
+	         $generic_packet->decode($pkt);
+	         $msg_tag = $generic_packet->get_opcode();
+	         if (defined ($msg_tag)){
+	            if($msg_tag eq "IP") {
+	               $ns = "IP";  
+   	         }elsif($msg_tag eq "NIC"){
+	               $ns = "NIC";
+	            }
+	         }
+         }else{
+	         $readSuccess = FALSE;
+	         $ns = "fetch";
+            Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+         }
+ 	  },
+     $ns
+)
+
+mmt_TableRow(
+
+   "IP",
+          Inet::Table::DCB->enqueue_packet("p2p0",  $generic_packet->encode());
+          #Inet::Table::DCB->enqueue_packet("p2p1",  $generic_packet->encode());
+          Inet::Table::DCB->enqueue_packet("stdio","=-=-=-=-=-=- IN P2P GOING TO NIC -=-=-=-=-=-=", %stdioLineParams);
+      ,      
+   "fetch"
+)
+
+mmt_TableRow(
+
+   "NIC", 
+
+         # IP packet coming in from NIC
+         # process packet
+
+         $generic_packet->set_opcode("P2P");
+         
+         Inet::Table::DCB->enqueue_packet("stdio", "=-=-=-=-=-=- IN P2P GOING TO IP -=-=-=-=-=-=", %stdioLineParams);
+	
+	 Tosf::Table::QUEUE->enqueue('hIp',$generic_packet->encode());
+	 Tosf::Table::SEMAPHORE->signal(semaphore => 'ipSem');
+      ,      
+   "fetch"
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "fetch",
+
+   Tosf::Table::SEMAPHORE->wait(semaphore => $self->{semID}, task => $self->{taskID});
+
+)
+1;
+   
+

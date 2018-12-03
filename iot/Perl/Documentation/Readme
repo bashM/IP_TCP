@@ -1,0 +1,75 @@
+Tosf Version 0.21 January 2018
+---------------------------
+Tosf is a framework for developing real-time systems using finite
+state machines. Tosf supports rate monotonic scheduling (RM) and earliest
+deadline first scheduling (EDF).
+
+Inet is a virtual packet-switching internet based (loosely) on TCP/IP.
+
+Inet services are implemented using Tosf. 
+
+Check the file Changes for code updates.
+Addition documentation can be found in Doc directories
+located in Tosf, Inet and the example directories.
+
+Directory Structure
+===================
+System:
+   Tosf: all the tosf system files
+   Inet: all inet system files
+   Mgen: a tool to autogenerate verification makefiles
+   Tool: hubServer and hubClient tools (legacy code, deprecated) 
+
+Example 1: the traffic light example from Lab9 csci355 
+   CentralizedTL: control and lights GUI together
+
+Example 2: a networked version of the traffic light controller 
+    ControlTL: control
+    LightsTL: lights GUI (the car signal is provided using hubClient) 
+
+Example 3: lights GUI driven from D1_155
+    LightsDI_155: lights GUI based on state encoding from Lab9	
+
+Example 4: a simple trace
+    Trace: trace the execution of a single task with period, deadline
+    and execution time all equal to 10. 
+
+Example 5: the wiki trace
+    WTrace: demonstrate the scheduling pattern of EDF and
+    RM using the example found in 
+    https://en.wikipedia.org/wiki/Earliest_deadline_first_scheduling
+
+Example 6: an Inet hub
+    Hub: a four port (no collisions) hub
+
+Notes on Makefile Customization 
+================================
+A master makefile manages the sub-directories and files in Tosf, Inet
+and each example application.  In turn, Tosf, Inet and each example
+directory has its own  makefile. Modules to be cleaned and tested must
+be enumerated in these makefile.
+
+Modules with .mmt extensions are stored in Fsm directories.  Each of there
+directories must have a makefile to translate .mmt files to .pm files.
+These makefiles do not need to be customized.
+
+Each "verification"  directory needs a makefile that is automatically
+generated my executing gen.pl in Mgen. The modules that need
+a verification makefile must be enumerated in gen.pl. 
+
+Directory Structure
+===================
+
+Tosf is implements in OO Perl. Classes are implemented using modules
+and related modules are stored in a directory. The directory structure
+is exemplified using Demo as follows:
+
+Demo                           # Class Directory
+   Lifo.pm                     # Class Module Implementation for Lifo
+   Verification                # Verification Directory
+      Lifo                     # Verification Directory for Lifo
+         Lifo.mis              # Module Interface Specification for Lifo
+         test_plan             # Test Plan for Lifo
+         lifo_tst.pl           # Interactive Tester for Lifo
+         tb.cew                # Test Bench for Lifo
+         Makefile

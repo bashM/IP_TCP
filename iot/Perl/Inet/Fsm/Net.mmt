@@ -1,0 +1,115 @@
+package Inet::Fsm::Net;
+#================================================================--
+# File Name    : Fsm/NODE.pm
+#
+# Purpose      : NODE Controller
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#=========================================================
+
+$| = 1;
+use strict;
+use warnings;
+
+include(mmt.pl)
+
+use constant  TRUE => 1;
+use constant  FALSE => 0;
+
+sub  new {
+   my $class = shift @_;
+   my %params = @_;
+
+   my $self = {
+      taskName => my $taskName = "Fsm::NODE::noname"
+   };
+
+   bless ($self, $class);
+   return $self;
+}
+
+my $gpkt; 
+my $pkt;
+my $raw;
+my @keys;
+my $k;
+my $readSuccess;
+my $msg;
+my $ns;
+my $eth_pkt=Inet::Packet::Ethernet->new();
+my $iface;
+
+mmt_TableBegin 
+
+mmt_TableRow(
+   "S0",
+
+   $raw = Tosf::Table::MESSAGE->dequeue($self->{taskName});
+   $gpkt->decode($raw);
+   $iface = $gpkt->get_msg(),
+
+   "S1"
+)
+
+mmt_TableRow(
+   "S1", 
+   
+   $readSuccess = FALSE;
+   if (Inet::Table::IFACE->get_opened($iface)) {
+      $pkt = Inet::Table::IFACE->dequeue_packet($iface);
+      if (defined($pkt)) {
+         $readSuccess = TRUE;
+         if ($pkt ne 'heartbeat') {
+         
+             $eth_pkt->decode($pkt);
+             #$eth_pkt->dump();
+         
+             my $msg = $eth_pkt->get_msg();
+	     my $src_mac = $eth_pkt->get_src_mac();
+	     my $dest_mac = $eth_pkt->get_dest_mac();
+	     Inet::Table::MAC->add($src_mac ,$iface );
+	     my $dest_Iface = Inet::Table::MAC->checkMac($dest_mac);
+	     
+	     if ($dest_Iface){
+	         Inet::Table::IFACE->enqueue_packet($dest_Iface, $pkt);
+	     
+	     }else{
+                 @keys = Inet::Table::IFACE->get_keys();
+            
+                foreach $k (@keys) {
+                       if (($k ne $iface) && (Inet::Table::IFACE->get_opened($k)) ) {
+                          Inet::Table::IFACE->enqueue_packet($k, $pkt);
+                       }
+                 }
+	     
+	     }
+           
+         }
+      }
+   }
+
+   if (!$readSuccess) {
+      Tosf::Table::MESSAGE->wait($self->{taskName});
+      $ns = "S0";
+   } else {
+      $ns = "S1"
+   },
+
+   $ns
+)
+
+mmt_TableEnd 
+
+mmt_Reset(
+   "S0",
+
+   $self->{taskName} = whoami();
+   Tosf::Table::MESSAGE->wait($self->{taskName});
+   $gpkt = Inet::Packet::Generic->new();
+
+)
+
+1;

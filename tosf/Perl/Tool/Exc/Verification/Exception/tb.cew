@@ -1,0 +1,50 @@
+#================================================================--
+# File Name    : tb.cew
+#
+# Purpose      : unit testing
+#
+# Author       : Peter Walsh, Vancouver Island University
+#
+# System       : Perl (Linux)
+#
+#================================================================--
+
+$|= 1;
+use strict;
+use warnings;
+
+include(cew.pl)
+
+use lib '../../../';
+use Exc::Exception;
+use Try::Tiny;
+
+cew_Variables
+
+################
+# testing exc
+
+my $exc=Exc::Exception->new(name => "Peter");
+cew_Ncase( , $exc->get_name(), "Peter")
+cew_Ncase($exc->set_name("Paul"), $exc->get_name(), "Paul")
+
+################
+# testing cew.pl 
+
+# no exception thrown (should not fail)
+cew_Ncase( , 0, 0)
+
+# unexpected exception thrown (should fail)
+cew_Ncase(die(Exc::Exception->new(name => "full")), 0, 0)
+
+# expected exception thrown (should not fail)
+cew_Ecase(die(Exc::Exception->new(name => "full")), "full")
+
+# unexpected exception thrown (should fail)
+cew_Ecase(die(Exc::Exception->new(name => "ull")), "full")
+cew_Ecase(die(Exc::Exception->new(name => "full")), "ull")
+
+# expected exception not thrown (should fail)
+cew_Ecase( , "full")
+
+cew_Summary

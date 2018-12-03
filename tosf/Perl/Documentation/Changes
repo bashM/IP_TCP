@@ -1,0 +1,39 @@
+Fri Nov 24 11:25am.
+Exam version of tosf (wip)  released.
+Fri Nov 24 13:14
+Forgot to activate Plant in CentralizedTL.
+Fixed now.
+Fri Dec 1 2017 1pm.
+Version 0.2 release.
+Added new examples.
+Added the concept of the maximum number
+of concurrent tasks (or cores) per scheduler tick.
+Added the ability the choose between
+EDF and RM scheduling algorithms.
+Wed Dec 6 12:15pm
+Modified Executive such that
+1. scheduled tasks are maintained on two queues.
+    - pTask for priority-based periodic tasks and
+    - apTask for non-priority based aperiodic tasks.
+2. task execution is modified to account for the fact
+   that there are now two queues of scheduled tasks.
+    
+Version 0.21 release.
+Thurs Jan 25 2018
+Updates line mis.
+Changed EXECUTIONER to DISPATCHER.
+Added methods to SCHEDULAR and DISPATCHER to customize tosf constants
+for a given application.
+Added Inet application VHub
+
+Tue Mar 6 2018
+Added a shared variable update_all method and modified
+update to take a sv name. This is to allow tasks to
+be added to the table dynamically (after the timer has started).
+
+Version 0.22 release
+Wed Mar 7 2018
+
+Version 0.23 release
+Wed Mar 15 2018
+Added VHub and VTap
